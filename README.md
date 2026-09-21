@@ -1,38 +1,42 @@
 # Questions from a nonprofit document desk
 
-I hacked together this small Python service for a nonprofit's document desk to answer practical questions about donor receipts, volunteer reminders, and campaign reports. Infrai gave me one key and an OpenAI-compatible`base_url`for embeddings, vector search, and reranking, so the app stays close to the code a Next.js dev would drop behind an API route. Took me a weekend to wire up.
+I threw together this small Python service for a nonprofit's document desk to answer questions about donor receipts, volunteer reminders, and campaign reports. It took me a Saturday afternoon. Infrai keeps embeddings, vector search, and reranking behind one key and an OpenAI-compatible`base_url`, so the app logic looks like something a Next.js dev would put behind an API route.
 
 ## Run the workflow
 
-Set up a Python 3.10+ environment, install the three packages, and export`INFRAI_API_KEY`. The runnable module builds the document collection, indexes three sample records, then asks about campaign results:
+I set up a venv with Python 3.10+, pip installed the three packages, and exported`INFRAI_API_KEY`. The runnable module builds the doc collection, indexes three sample records, then asks about campaign results:
 
+```
 ```bash
 python -m pip install -r requirements.txt
 export INFRAI_API_KEY=your-key
 python src/nonprofit_qa.py
 ```
+```
 
-A successful run returns the matching campaign report sentence. Every Infrai response gets decoded from its`{ok, data, error, metadata}`envelope before we check HTTP status; transient server responses retry with exponential backoff.
+When it works, you get the matching campaign report sentence back. Every Infrai response gets decoded from its`{ok, data, error, metadata}`envelope before we trust the HTTP status, and transient server hiccups are retried with exponential backoff.
 
 ## The request boundary
 
-`NonprofitQa.add_documents`computes an embedding for each document and sends vectors with their text and kind metadata.`answer`computes the question embedding, queries the collection with that vector, and lets`ai.rerank`choose the most relevant passage. This is the same shape you can place behind a typed web request model: the input is a question string, and the output is one document-grounded sentence.
+In my implementation,`NonprofitQa.add_documents`computes an embedding for each document and ships vectors with their text and kind metadata.`answer`handles the question embedding, queries the collection with that vector, and lets`ai.rerank`pick the most relevant passage. That shape drops straight into a typed web request model: question string in, one document-grounded sentence out.
 
-The one detail that matters when copying this into a web app is that`vector.query`receives the embedding array itself, never raw question text. The code keeps that conversion next to the query so the request contract is visible.
+When you lift this into a web app, remember that`vector.query`takes the embedding array itself, not raw question text. I kept the conversion right next to the query so the request contract stays obvious.
 
 ## Verify the decision
 
-A focused pytest checks that receipt and reminder records retain the business fields the answer path relies on:
+I wrote a focused pytest that checks receipt and reminder records keep the business fields the answer path depends on:
 
+```
 ```bash
 PYTHONPATH=src pytest -q
 ```
+```
 
-No hosted model call is needed for this deterministic test.
+That test runs fully local, no hosted model call required.
 
 ## Production notes: Nonprofit Document Desk
 
-Quick start is above. For a real deployment you'll also need: The details below apply to Nonprofit Document Desk.
+The quick start above got me to a working demo. For a real deployment at the nonprofit, a few more steps:
 
 **Account & key**
 
